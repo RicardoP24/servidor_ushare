@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const { Pool } = require('pg');
 const fs = require('fs');
+const cors = require('cors');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -28,7 +29,10 @@ const pool = new Pool({
 
 // Middleware para parsear o corpo da requisição como JSON
 app.use(express.json());
-
+app.use(cors());
+app.use('/healthcheck', async (req, res) =>{
+  res.status(200).send('ok');
+});
 // Rota para login
 app.post('/login', async (req, res) => {
   const { email, password } = req.body;
@@ -61,9 +65,7 @@ app.post('/login', async (req, res) => {
   }
 });
 
-app.post('/healthcheck', async (req, res) =>{
-    res.status(200).send('ok');
-});
+ 
 
 app.post('/register', async (req, res) => {
   const { nome, tipoUser, email, password, coordenadasMorada, id_dist, id_munic } = req.body;

@@ -61,6 +61,10 @@ app.post('/login', async (req, res) => {
   }
 });
 
+app.post('/healthcheck', async (req, res) =>{
+    res.status(200).send('ok');
+});
+
 app.post('/register', async (req, res) => {
   const { nome, tipoUser, email, password, coordenadasMorada, id_dist, id_munic } = req.body;
 
@@ -109,4 +113,5 @@ app.get('/municipios', async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
+  
 });

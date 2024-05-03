@@ -8,6 +8,7 @@ const cors = require('cors');
 const app = express();
 const PORT = process.env.PORT || 3000;
 require('dotenv').config();
+const secretKey = process.env.JWT_SECRET; // Use default key if not provided in the environment
 
 // Configuração do pool de conexão com o PostgreSQL
 const pool = new Pool({
@@ -16,21 +17,21 @@ const pool = new Pool({
   database: process.env.DB_DATABASE,
   password: process.env.DB_PASSWORD,
   port: process.env.DB_PORT,
-  ssl: {
-    // You can specify SSL options here
-    //rejectUnauthorized: true, // Set to true to reject unauthorized connections
-    // Optionally, you can provide SSL certificate details
-    // For example:
-     ca: fs.readFileSync('./certificadoSSL/global-bundle.pem'), // Path to CA certificate file
-    // cert: fs.readFileSync('/path/to/client-certificate.crt'), // Path to client certificate file
-    // key: fs.readFileSync('/path/to/client-key.key'), // Path to client key file
-  },
+  // ssl: {
+  //   // You can specify SSL options here
+  //   //rejectUnauthorized: true, // Set to true to reject unauthorized connections
+  //   // Optionally, you can provide SSL certificate details
+  //   // For example:
+  //    ca: fs.readFileSync('./certificadoSSL/global-bundle.pem'), // Path to CA certificate file
+  //   // cert: fs.readFileSync('/path/to/client-certificate.crt'), // Path to client certificate file
+  //   // key: fs.readFileSync('/path/to/client-key.key'), // Path to client key file
+  // },
 });
 
 // Middleware para parsear o corpo da requisição como JSON
 app.use(express.json());
 app.use(cors());
-app.use('/healthcheck', async (req, res) =>{
+app.use('/healthcheck', async (req, res) => {
   res.status(200).send('ok');
 });
 // Rota para login
@@ -64,28 +65,57 @@ app.post('/login', async (req, res) => {
     res.status(500).json({ message: 'Erro interno do servidor' });
   }
 });
+app.get('/protected', verifyToken, (req, res) => {
+  const userId = req.user.id;
 
- 
+  res.json({id:userId ,message: 'This is a protected route' });
+});
 
 app.post('/register', async (req, res) => {
-  const { nome, tipoUser, email, password, coordenadasMorada, id_dist, id_munic } = req.body;
+  const { nome, tipoUser, email, password, coordenadasMorada, id_dist, id_munic, nif } = req.body;
 
   try {
+    // Hash the password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
     const query = `
-      INSERT INTO Utilizador (nome, tipoUser, email, password, coordenadasMorada, id_dist, id_munic)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      INSERT INTO Utilizador (nome, tipoUser, email, password, coordenadasMorada, id_dist, id_munic, nif)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *;
     `;
-    const values = [nome, tipoUser, email, password, coordenadasMorada, id_dist, id_munic];
+    const values = [nome, tipoUser, email, hashedPassword, coordenadasMorada, id_dist, id_munic, nif];
 
     const result = await pool.query(query, values);
 
-    res.status(201).json(result.rows[0]);
+    const token = jwt.sign({ id: result.rows[0].id }, process.env.JWT_SECRET);
+
+    res.status(201).json({ ...result.rows[0], token: token });
+
+
+
   } catch (err) {
     console.error('Erro ao registrar usuário:', err);
     res.status(500).send('Erro interno do servidor');
   }
 });
+
+function verifyToken(req, res, next) {
+  const token = req.headers['authorization'];
+
+
+  if (!token) {
+    return res.status(403).json({ message: 'Token not provided' });
+  }
+
+  jwt.verify(token, secretKey, (err, decoded) => {
+    if (err) {
+      return res.status(401).json({ message: 'Invalid token' });
+    }
+
+    req.user = decoded;
+    next();
+  });
+}
 
 app.get('/distritos', async (req, res) => {
   try {
@@ -115,5 +145,5 @@ app.get('/municipios', async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
-  
+
 });

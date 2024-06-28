@@ -150,6 +150,16 @@ app.post('/anuncios', async (req, res) => {
   }
 });
 
+// GET endpoint for retrieving all anuncios
+app.get('/anuncios', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM anuncios');
+    res.status(200).json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send(err.message);
+  }
+});
 
 
 app.listen(PORT, () => {

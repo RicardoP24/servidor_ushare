@@ -150,11 +150,54 @@ app.post('/anuncios', async (req, res) => {
   }
 });
 
-// GET endpoint for retrieving all anuncios
+// GET endpoint for retrieving anuncios by id_munic
 app.get('/anuncios', async (req, res) => {
+  const { id_munic } = req.query;
   try {
-    const result = await pool.query('SELECT * FROM anuncios');
+    const result = await pool.query('SELECT * FROM anuncios WHERE id_munic = $1', [id_munic]);
     res.status(200).json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send(err.message);
+  }
+});
+// GET endpoint for retrieving anuncios by id_munic
+app.get('/utilizador', async (req, res) => {
+  const { id_user } = req.query;
+  try {
+    const result = await pool.query('SELECT * FROM utilizador WHERE id = $1', [id_user]);
+    res.status(200).json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send(err.message);
+  }
+});
+
+app.get('/comentarios', async (req, res) => {
+  const { id_anuncio } = req.query;
+  if (!id_anuncio) {
+    return res.status(400).send('id_anuncio is required');
+  }
+  try {
+    const result = await pool.query('SELECT * FROM comentarios_anuncios WHERE id_anuncio = $1', [id_anuncio]);
+    res.status(200).json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send(err.message);
+  }
+});
+
+app.post('/comentarios', async (req, res) => {
+  const { id_user, id_anuncio, comentario } = req.body;
+  if (!id_user || !id_anuncio || !comentario) {
+    return res.status(400).send('id_user, id_anuncio, and comentario are required');
+  }
+  try {
+    const result = await pool.query(
+      'INSERT INTO comentarios_anuncios (id_user, id_anuncio, comentario) VALUES ($1, $2, $3) RETURNING *',
+      [id_user, id_anuncio, comentario]
+    );
+    res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error(err);
     res.status(500).send(err.message);

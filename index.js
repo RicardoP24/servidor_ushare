@@ -14,8 +14,8 @@ const pool = new Pool({
   connectionString: process.env.POSTGRES_URL,
 })
 
-pool.connect((err)=>{
-  if(err) throw err;
+pool.connect((err) => {
+  if (err) throw err;
   console.log("Conectado a base de dados")
 
 })
@@ -51,7 +51,7 @@ app.post('/login', async (req, res) => {
     // Gera o token JWT
     const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET);
 
-    res.status(200).json({user,token });
+    res.status(200).json({ user, token });
   } catch (error) {
     console.error('Erro ao fazer login:', error);
     res.status(500).json({ message: 'Erro interno do servidor' });
@@ -62,7 +62,7 @@ app.post('/login', async (req, res) => {
 app.get('/protected', verifyToken, (req, res) => {
   const userId = req.user.id;
 
-  res.json({id:userId ,message: 'This is a protected route' });
+  res.json({ id: userId, message: 'This is a protected route' });
 });
 
 app.post('/register', async (req, res) => {
@@ -150,11 +150,126 @@ app.post('/anuncios', async (req, res) => {
   }
 });
 
+
+
+app.post('/mensagem', async (req, res) => {
+  const { id_user, id_user2, mensagem } = req.body;
+  if (!id_user || !id_user2 || !mensagem) {
+    return res.status(400).send('id_user, id_user2, and mensagem are required');
+  }
+
+  try {
+    // Check if the connection already exists in either direction
+    const checkResult = await pool.query(
+      'SELECT * FROM Conexoes WHERE (id_user1 = $1 AND id_user2 = $2) OR (id_user1 = $2 AND id_user2 = $1)',
+      [id_user, id_user2]
+    );
+
+    if (checkResult.rows.length > 0) {
+      // If the connection already exists, insert the message
+      const messageResult = await pool.query(
+        'INSERT INTO Mensagens (id_user1, id_user2, mensagem) VALUES ($1, $2, $3) RETURNING *',
+        [id_user, id_user2, mensagem]
+      );
+      return res.status(201).json(messageResult.rows[0]);
+    } else {
+      // If the connection does not exist, insert the connection in both directions
+      const insertConnection = async (user1, user2) => {
+        await pool.query(
+          'INSERT INTO Conexoes (id_user1, id_user2) VALUES ($1, $2)',
+          [user1, user2]
+        );
+      };
+
+      await Promise.all([
+        insertConnection(id_user, id_user2),
+      ]);
+
+      const messageResult = await pool.query(
+        'INSERT INTO Mensagens (id_user1, id_user2, mensagem) VALUES ($1, $2, $3) RETURNING *',
+        [id_user, id_user2, mensagem]
+      );
+
+      return res.status(201).json({
+        connection: 'Both directions inserted',
+        message: messageResult.rows[0]
+      });
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).send(err.message);
+  }
+});
+
+
+app.get('/mensagem', async (req, res) => {
+  const { id_user, id_user2 } = req.query;
+
+  if (!id_user || !id_user2) {
+    return res.status(400).send('id_user and id_user2 are required');
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT * FROM Mensagens
+       WHERE (id_user1 = $1 AND id_user2 = $2) OR (id_user1 = $2 AND id_user2 = $1)
+       ORDER BY id ASC`, // Assuming you have an 'id' column for ordering, if not use appropriate column
+      [id_user, id_user2]
+    );
+    res.status(200).json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send(err.message);
+  }
+});
+
+app.get('/conexoes', async (req, res) => {
+  const { id_user1 } = req.query;
+
+  if (!id_user1) {
+    return res.status(400).send('id_user1 is required');
+  }
+
+  try {
+    // Get all rows where id_user1 matches either id_user1 or id_user2
+    const conexoesQuery = `
+      SELECT id_user1, id_user2
+      FROM Conexoes
+      WHERE id_user1 = $1 OR id_user2 = $1
+    `;
+    const conexoesResult = await pool.query(conexoesQuery, [id_user1]);
+
+    if (conexoesResult.rows.length === 0) {
+      return res.status(404).json({ message: 'No connections found' });
+    }
+
+    const userIds = conexoesResult.rows.map(row => {
+      return row.id_user1 === parseInt(id_user1) ? row.id_user2 : row.id_user1;
+    });
+    const userNames = await getUserNames(userIds);
+
+    // Map connections to user names
+    const connections = userIds.map(id => {
+      const user = userNames.find(user => user.id === id);
+      return {
+        id_user: id,
+        nome: user ? user.nome : 'Unknown'
+      };
+    });
+
+    res.status(200).json(connections);
+  } catch (err) {
+    console.error('Erro ao obter conexões:', err);
+    res.status(500).send('Erro interno do servidor');
+  }
+});
+
+
 // GET endpoint for retrieving anuncios by id_munic
 app.get('/anuncios', async (req, res) => {
   const { id_munic } = req.query;
   try {
-    const result = await pool.query('SELECT * FROM anuncios WHERE id_munic = $1', [id_munic]);
+    const result = await pool.query('SELECT * FROM anuncios WHERE id_munic = $1 ORDER BY id DESC', [id_munic]);
     res.status(200).json(result.rows);
   } catch (err) {
     console.error(err);
@@ -203,6 +318,12 @@ app.post('/comentarios', async (req, res) => {
     res.status(500).send(err.message);
   }
 });
+
+const getUserNames = async (userIds) => {
+  const query = 'SELECT id, nome FROM Utilizador WHERE id = ANY($1)';
+  const result = await pool.query(query, [userIds]);
+  return result.rows;
+};
 
 
 app.listen(PORT, () => {

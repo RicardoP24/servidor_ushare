@@ -389,8 +389,11 @@ app.get('/interessados_anuncios', async (req, res) => {
     `, [anuncioResult.rows[0].id_user]);
 
 
+    const merge=[...userResult.rows];
+      merge.push({titulo: anuncioResult.rows[0].titulo})
 
-    res.json([{...userResult.rows, titulo: anuncioResult.rows[0].titulo}]);
+
+    res.json(merge);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });

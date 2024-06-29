@@ -158,7 +158,32 @@ app.post('/mensagem', async (req, res) => {
     return res.status(400).send('id_user, id_user2, and mensagem are required');
   }
 
+
+
   try {
+    // Retrieve the id_anuncio associated with the given id_user
+    const selectAnuncioQuery = 'SELECT id FROM Anuncios WHERE id_user = $1';
+    const anuncioResult = await pool.query(selectAnuncioQuery, [id_user]);
+
+    if (anuncioResult.rows.length !== 0) {
+
+      const id_anuncio = anuncioResult.rows[0].id;
+
+      // Check if the (id_user, id_ianuncio) pair already exists in Interessados_anuncios
+      const selectInteressadoQuery = 'SELECT * FROM Interessados_anuncios WHERE id_user = $1 AND id_anuncio = $2';
+      const interessadoResult = await pool.query(selectInteressadoQuery, [id_user, id_anuncio]);
+
+      if (interessadoResult.rows.length <= 0) {
+
+
+
+        // Insert the retrieved id_anuncio into the Interessados_anuncios table
+        const insertQuery = 'INSERT INTO Interessados_anuncios (id_user, id_anuncio) VALUES ($1, $2)';
+        await pool.query(insertQuery, [id_user, id_anuncio]);
+
+      }
+
+    }
     // Check if the connection already exists in either direction
     const checkResult = await pool.query(
       'SELECT * FROM Conexoes WHERE (id_user1 = $1 AND id_user2 = $2) OR (id_user1 = $2 AND id_user2 = $1)',
@@ -268,8 +293,21 @@ app.get('/conexoes', async (req, res) => {
 // GET endpoint for retrieving anuncios by id_munic
 app.get('/anuncios', async (req, res) => {
   const { id_munic } = req.query;
+  const evento = 'Evento'
   try {
-    const result = await pool.query('SELECT * FROM anuncios WHERE id_munic = $1 ORDER BY id DESC', [id_munic]);
+    const result = await pool.query('SELECT * FROM anuncios WHERE (id_munic = $1 AND tipoanuncio <> $2 ) ORDER BY id DESC', [id_munic, evento]);
+    res.status(200).json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send(err.message);
+  }
+});
+
+app.get('/eventos', async (req, res) => {
+  const { id_munic } = req.query;
+  const evento = 'Evento'
+  try {
+    const result = await pool.query('SELECT * FROM anuncios WHERE (id_munic = $1 AND tipoanuncio = $2 ) ORDER BY id DESC', [id_munic, evento]);
     res.status(200).json(result.rows);
   } catch (err) {
     console.error(err);
@@ -324,6 +362,40 @@ const getUserNames = async (userIds) => {
   const result = await pool.query(query, [userIds]);
   return result.rows;
 };
+
+
+app.get('/interessados_anuncios', async (req, res) => {
+  const { id_anuncio } = req.query;
+
+  try {
+    // Fetch the anuncio based on id_anuncio
+    const anuncioResult = await pool.query(`
+      SELECT * FROM anuncios WHERE id = $1
+    `, [id_anuncio]);
+
+    // Check if anuncio exists
+    if (anuncioResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Anuncio not found' });
+    }
+
+    // Fetch the users related to the anuncio
+    const userResult = await pool.query(`
+      SELECT 
+        *
+      FROM 
+        utilizador 
+      WHERE
+      id = $1
+    `, [anuncioResult.rows[0].id_user]);
+
+
+
+    res.json([{...userResult.rows, titulo: anuncioResult.rows[0].titulo}]);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 
 
 app.listen(PORT, () => {

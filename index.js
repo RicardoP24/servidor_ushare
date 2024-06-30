@@ -153,28 +153,23 @@ app.post('/anuncios', async (req, res) => {
 
 
 app.post('/mensagem', async (req, res) => {
-  const { id_user, id_user2, mensagem } = req.body;
-  if (!id_user || !id_user2 || !mensagem) {
-    return res.status(400).send('id_user, id_user2, and mensagem are required');
+  const { id_user, id_user2, mensagem, id_anuncio } = req.body;
+  if (!id_user || !id_user2 || !mensagem || !id_anuncio) {
+     return res.status(400).send('id_user, id_user2, and mensagem are required');
   }
 
 
 
   try {
     // Retrieve the id_anuncio associated with the given id_user
-    const selectAnuncioQuery = 'SELECT id FROM Anuncios WHERE id_user = $1';
-    const anuncioResult = await pool.query(selectAnuncioQuery, [id_user]);
-
-    if (anuncioResult.rows.length !== 0) {
-
-      const id_anuncio = anuncioResult.rows[0].id;
+    if (id_anuncio!=-1) {
 
       // Check if the (id_user, id_ianuncio) pair already exists in Interessados_anuncios
       const selectInteressadoQuery = 'SELECT * FROM Interessados_anuncios WHERE id_user = $1 AND id_anuncio = $2';
       const interessadoResult = await pool.query(selectInteressadoQuery, [id_user, id_anuncio]);
 
+      console.log(interessadoResult.rows,"kkkkkkk")
       if (interessadoResult.rows.length <= 0) {
-
 
 
         // Insert the retrieved id_anuncio into the Interessados_anuncios table
@@ -378,22 +373,43 @@ app.get('/interessados_anuncios', async (req, res) => {
       return res.status(404).json({ message: 'Anuncio not found' });
     }
 
+
+
     // Fetch the users related to the anuncio
-    const userResult = await pool.query(`
-      SELECT 
-        *
-      FROM 
-        utilizador 
-      WHERE
-      id = $1
-    `, [anuncioResult.rows[0].id_user]);
+    const interessados = await pool.query(`
+SELECT * FROM Interessados_anuncios WHERE id_anuncio = $1
+    `, [id_anuncio]);
+
+    let arrayFinal=[]
 
 
-    const merge=[...userResult.rows];
-      merge.push({titulo: anuncioResult.rows[0].titulo})
+    interessados.rows.forEach(async interessado => {
+      
+      const userResult = await pool.query(`
+            SELECT 
+              *
+            FROM 
+              utilizador 
+            WHERE
+            id = $1
+          `, [interessado.id_user]);
 
+      
+      arrayFinal.push(userResult.rows[0]);
 
-    res.json(merge);
+      
+        
+    });
+
+    setTimeout(() => {
+      
+      console.log(arrayFinal)
+      // Fetch the users related to the anuncio
+      arrayFinal.push({ titulo: anuncioResult.rows[0].titulo })
+      res.json(arrayFinal);
+
+    }, 2000);
+
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });

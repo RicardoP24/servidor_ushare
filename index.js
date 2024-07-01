@@ -168,7 +168,6 @@ app.post('/mensagem', async (req, res) => {
       const selectInteressadoQuery = 'SELECT * FROM Interessados_anuncios WHERE id_user = $1 AND id_anuncio = $2';
       const interessadoResult = await pool.query(selectInteressadoQuery, [id_user, id_anuncio]);
 
-      console.log(interessadoResult.rows,"kkkkkkk")
       if (interessadoResult.rows.length <= 0) {
 
 
@@ -285,12 +284,25 @@ app.get('/conexoes', async (req, res) => {
 });
 
 
+
+
 // GET endpoint for retrieving anuncios by id_munic
 app.get('/anuncios', async (req, res) => {
   const { id_munic } = req.query;
   const evento = 'Evento'
   try {
     const result = await pool.query('SELECT * FROM anuncios WHERE (id_munic = $1 AND tipoanuncio <> $2 ) ORDER BY id DESC', [id_munic, evento]);
+    res.status(200).json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send(err.message);
+  }
+});
+
+app.get('/posts', async (req, res) => {
+  const { id_munic } = req.query;
+  try {
+    const result = await pool.query('SELECT * FROM anuncios WHERE (id_munic = $1 ) ORDER BY id DESC', [id_munic]);
     res.status(200).json(result.rows);
   } catch (err) {
     console.error(err);
